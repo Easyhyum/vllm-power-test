@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/user1/easyhyum/vllm/.deps/qutlass-subbuild/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

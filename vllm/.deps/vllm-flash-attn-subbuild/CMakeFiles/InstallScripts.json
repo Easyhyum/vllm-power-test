@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/user1/easyhyum/vllm/.deps/vllm-flash-attn-subbuild/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

@@ -1,0 +1,15 @@
+# This is a generated file and its contents are an internal implementation detail.
+# The download step will be re-executed if anything in this file changes.
+# No other meaning or use of this file is supported.
+
+method=git
+command=/tmp/pip-build-env-r2ogqy0q/overlay/lib/python3.12/site-packages/cmake/data/bin/cmake;-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE;-P;/home/user1/easyhyum/vllm/.deps/flashmla-subbuild/flashmla-populate-prefix/tmp/flashmla-populate-gitclone.cmake
+source_dir=/home/user1/easyhyum/vllm/.deps/flashmla-src
+work_dir=/home/user1/easyhyum/vllm/.deps
+repository=https://github.com/vllm-project/FlashMLA
+remote=origin
+init_submodules=TRUE
+recurse_submodules=--recursive
+submodules=
+CMP0097=NEW
+      

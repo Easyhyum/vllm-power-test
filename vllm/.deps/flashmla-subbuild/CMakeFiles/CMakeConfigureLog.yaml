@@ -1,0 +1,73 @@
+
+---
+events:
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/tmp/pip-build-env-pc9qhuru/overlay/lib/python3.12/site-packages/cmake/data/share/cmake-4.2/Modules/CMakeDetermineSystem.cmake:12 (find_program)"
+      - "CMakeLists.txt:16 (project)"
+    mode: "program"
+    variable: "CMAKE_UNAME"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "uname"
+    candidate_directories:
+      - "/tmp/pip-build-env-pc9qhuru/overlay/bin/"
+      - "/tmp/pip-build-env-pc9qhuru/normal/bin/"
+      - "/home/user1/easyhyum/venv/bin/"
+      - "/home/user1/.vscode-server/data/User/globalStorage/github.copilot-chat/debugCommand/"
+      - "/home/user1/.vscode-server/data/User/globalStorage/github.copilot-chat/copilotCli/"
+      - "/home/user1/.vscode-server/cli/servers/Stable-994fd12f8d3a5aa16f17d42c041e5809167e845a/server/bin/remote-cli/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/usr/bin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/snap/bin/"
+    searched_directories:
+      - "/tmp/pip-build-env-pc9qhuru/overlay/bin/uname"
+      - "/tmp/pip-build-env-pc9qhuru/normal/bin/uname"
+      - "/home/user1/easyhyum/venv/bin/uname"
+      - "/home/user1/.vscode-server/data/User/globalStorage/github.copilot-chat/debugCommand/uname"
+      - "/home/user1/.vscode-server/data/User/globalStorage/github.copilot-chat/copilotCli/uname"
+      - "/home/user1/.vscode-server/cli/servers/Stable-994fd12f8d3a5aa16f17d42c041e5809167e845a/server/bin/remote-cli/uname"
+      - "/usr/local/sbin/uname"
+      - "/usr/local/bin/uname"
+      - "/usr/sbin/uname"
+    found: "/usr/bin/uname"
+    search_context:
+      ENV{PATH}:
+        - "/tmp/pip-build-env-pc9qhuru/overlay/bin"
+        - "/tmp/pip-build-env-pc9qhuru/normal/bin"
+        - "/home/user1/easyhyum/venv/bin"
+        - "/home/user1/.vscode-server/data/User/globalStorage/github.copilot-chat/debugCommand"
+        - "/home/user1/.vscode-server/data/User/globalStorage/github.copilot-chat/copilotCli"
+        - "/home/user1/.vscode-server/cli/servers/Stable-994fd12f8d3a5aa16f17d42c041e5809167e845a/server/bin/remote-cli"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/tmp/pip-build-env-pc9qhuru/overlay/lib/python3.12/site-packages/cmake/data/share/cmake-4.2/Modules/CMakeDetermineSystem.cmake:212 (message)"
+      - "CMakeLists.txt:16 (project)"
+    message: |
+      The system is: Linux - 6.8.0-90-generic - x86_64
+...
