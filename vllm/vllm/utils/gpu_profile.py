@@ -29,10 +29,10 @@ try:
 except ImportError:
     NVML_AVAILABLE = False
 
-csv_path = f"/easyhyum/logs/gpu_profile_{os.getpid()}.csv"
+csv_path = f"logs"
 
 class GPUMonitor:
-    def __init__(self, device_id=0, batch_size=None, graph_batch_size=None):
+    def __init__(self, device_id=0, batch_size=None, graph_batch_size=None, decoding_steps=None, cudagraph_mode=None):
         self.device_id = device_id
         self.handle = None
         self.metrics = []
@@ -40,6 +40,8 @@ class GPUMonitor:
         self.num_samples = None  # 처리된 샘플 수
         self.batch_size = batch_size
         self.graph_batch_size = graph_batch_size
+        self.decoding_steps = decoding_steps
+        self.cudagraph_mode = cudagraph_mode
         if NVML_AVAILABLE:
             try:
                 pynvml.nvmlInit()
@@ -140,7 +142,7 @@ class GPUMonitor:
                 if metric:
                     metric['timestamp'] = time.time()
                     self.metrics.append(metric)
-                time.sleep(0.1)  # 10ms 간격
+                time.sleep(0.02)  # 20ms 간격
         
         monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
         monitor_thread.start()
@@ -212,6 +214,37 @@ class GPUMonitor:
                     v,
                 )
             os.environ[k] = v
+    def save_statistics_to_csv(self, path=csv_path):
+        """수집된 메트릭을 CSV 파일로 저장"""
+        if not self.metrics:
+            print("저장할 메트릭 데이터가 없습니다.")
+            return
+        
+        import csv
+        
+        keys = ['cudagraph_mode', 'batch_size', 'graph_batch_size', 'index', 'length', 'timestamp', 'power', 'temperature', 'graphics_clock', 'sm_clock', 
+                'memory_clock', 'memory_used', 'memory_total', 'gpu_util', 'memory_util']
+        # row = {"cudagraph_mode": self.cudagraph_mode, "batch_size": self.batch_size, "graph_batch_size": self.graph_batch_size, 'decoding_steps': self.decoding_steps}
+        file_path = os.path.join(path, f"gpu_profile_{os.getpid()}.csv")
+        length = len(self.metrics)
+        # Create file with header if missing, then append rows
+        try:
+            # file_path 파일이 존재하는지 확인
+            if not os.path.exists(file_path):
+                with open(file_path, mode='w', newline='') as csvfile:
+                    writer = csv.DictWriter(csvfile, fieldnames=keys)
+                    writer.writeheader()
+            with open(file_path, mode='a', newline='') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=keys)
+                for i, metric in enumerate(self.metrics):
+                    # build row for this metric
+                    metric_row = {k: metric.get(k, None) for k in keys}
+                    # update with contextual fields
+                    metric_row.update({"cudagraph_mode": self.cudagraph_mode, "batch_size": self.batch_size, "graph_batch_size": self.graph_batch_size, "length": length, "index": i + 1})
+                    writer.writerow(metric_row)
+            # print(f"메트릭 데이터가 {file_path}에 저장되었습니다.")
+        except Exception as e:
+            print(f"메트릭 CSV 저장 중 오류: {e}")
     def print_statistics(self, label=""):
         """통계 출력"""
         stats = self.get_statistics()

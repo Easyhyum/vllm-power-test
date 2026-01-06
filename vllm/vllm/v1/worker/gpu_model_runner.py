@@ -3221,6 +3221,7 @@ class GPUModelRunner(
             start_time = time.time()
             is_decoding = np.all(num_scheduled_tokens_np == 1) and cudagraph_mode
             # is_decoding = True
+            # print(f" scheduler_output: {scheduler_output}")
             if not is_decoding:
                 # print("&&&& Do not Print &&&&&")
                 model_output = self._model_forward(
@@ -3233,13 +3234,15 @@ class GPUModelRunner(
             else:
                 batch_size = num_reqs
                 graph_batch_size = batch_desc.num_reqs
+                # decoding_steps = scheduler_output.num_output_tokens.min()
+                decoding_steps = 1
                 # print(f"{time.time() - start_time:.5f} sec taken for model forward {batch_size}, {graph_batch_size} {len(num_scheduled_tokens_np)} {num_scheduled_tokens_np}")
                 # print(f"cudagraph_mode: {cudagraph_mode}, batch_desc: {batch_desc}")
                 device_id = 0
-                monitor_graph = GPUMonitor(device_id=device_id, batch_size=batch_size, graph_batch_size=graph_batch_size)
+                monitor_graph = GPUMonitor(device_id=device_id, batch_size=batch_size, graph_batch_size=graph_batch_size, decoding_steps=decoding_steps, cudagraph_mode=cudagraph_mode)
                 def run_model_forward_100():
-                    for _ in range(1000):
-                        model_output = self._model_forward(
+                    for _ in range(300):
+                        self._model_forward(
                         input_ids=input_ids,
                         positions=positions,
                         intermediate_tensors=intermediate_tensors,
@@ -3255,9 +3258,10 @@ class GPUModelRunner(
                     run_model_forward_100,
                     num_samples=batch_size
                 )
-                
+
                 # GPU 메트릭 출력
-                monitor_graph.print_statistics(f"Model Forward time: {monitor_graph.execution_time:.2f}s (graph_batch: {graph_batch_size}, batch={batch_size}, reqs={num_reqs}, cudagraph={cudagraph_mode} {num_scheduled_tokens_np.tolist()})")
+                monitor_graph.save_statistics_to_csv()
+                # monitor_graph.print_statistics(f"Model Forward time: {monitor_graph.execution_time:.5f}s (graph_batch: {graph_batch_size}, batch={batch_size}, reqs={num_reqs}, cudagraph={cudagraph_mode} {num_scheduled_tokens_np.tolist()})")
                 time.sleep(1)
 
         with record_function_or_nullcontext("gpu_model_runner: postprocess"):

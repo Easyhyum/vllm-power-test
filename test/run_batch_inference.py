@@ -114,9 +114,8 @@ def main():
 
     if not prompts:
         raise SystemExit("No prompts found in input file or dataset")
-    print(args.input_file, args.data_len)
-    prompts = prompts[: int(args.data_len)] if int(args.data_len) > 0 else prompts
-    print(f"Running batch inference on {len(prompts)} prompts...")
+    # print(args.input_file, args.data_len)
+
     # exit()
     os.environ.setdefault("VLLM_USE_V1", "1")
 
@@ -127,41 +126,71 @@ def main():
         max_cudagraph_capture_size=256,
     )
     
-    sampling_params = SamplingParams(temperature=0.8, top_p=0.95, max_tokens=args.max_tokens)
+
 
     out_f = open(args.output_file, "w", encoding="utf-8")
     global_index = 0
     
-    try:
-        for batch in tqdm(list(batched(prompts, args.batch_size)), desc="Batches"):
-            # sync before run for more accurate NVTX boundaries if user cares
-            if torch.cuda.is_available():
-                torch.cuda.synchronize()
+    test_sequence = [{
+        'data_len': 256,
+        'batch_size': 16,
+        "max_tokens": 256
+    },
+    {
+        'data_len': 256,
+        'batch_size': 8,
+        "max_tokens": 256
+    },
+    {
+        'data_len': 256,
+        'batch_size': 9,
+        "max_tokens": 256
+    },
+    {
+        'data_len': 256,
+        'batch_size': 10,
+        "max_tokens": 256
+    },
+    ]
 
-            torch.cuda.nvtx.range_push("vLLM_Batch_Generation")
-            outputs = llm.generate(batch, sampling_params)
-            torch.cuda.nvtx.range_pop()
 
-            for input, out in zip(batch, outputs):
-                idx = global_index
-                global_index += 1
-                # try to extract text; fallback to str()
-                text = getattr(out, "text", None)
-                if text is None:
-                    try:
-                        text = out.completion_text  # some versions
-                    except Exception:
-                        text = out.outputs
-                
-                # record = {"index": idx, "input": input}
-                # json.dump(record, out_f, ensure_ascii=False)
-                # out_f.write("\n")
-                # record = {"index": idx, "output": text}
-                # json.dump(record, out_f, ensure_ascii=False)
-                # out_f.write("\n")
-        print(f"Wrote outputs to {args.output_file}")
-    finally:
-        out_f.close()
+    for test in test_sequence:
+        batch_size = test['batch_size']
+        data_len = test['data_len']
+        max_tokens = test['max_tokens']
+        test_prompts = prompts[: int(data_len)] if int(data_len) > 0 else prompts
+        sampling_params = SamplingParams(temperature=0.8, top_p=0.95, max_tokens=max_tokens)
+        print(f"Running batch inference on {len(prompts)} prompts...")
+        try:
+            for batch in tqdm(list(batched(test_prompts, batch_size)), desc="Batches"):
+                # sync before run for more accurate NVTX boundaries if user cares
+                if torch.cuda.is_available():
+                    torch.cuda.synchronize()
+
+                torch.cuda.nvtx.range_push("vLLM_Batch_Generation")
+                outputs = llm.generate(batch, sampling_params)
+                torch.cuda.nvtx.range_pop()
+
+                for input, out in zip(batch, outputs):
+                    idx = global_index
+                    global_index += 1
+                    # try to extract text; fallback to str()
+                    text = getattr(out, "text", None)
+                    if text is None:
+                        try:
+                            text = out.completion_text  # some versions
+                        except Exception:
+                            text = out.outputs
+                    
+                    # record = {"index": idx, "input": input}
+                    # json.dump(record, out_f, ensure_ascii=False)
+                    # out_f.write("\n")
+                    # record = {"index": idx, "output": text}
+                    # json.dump(record, out_f, ensure_ascii=False)
+                    # out_f.write("\n")
+            print(f"Wrote outputs to {args.output_file}")
+        finally:
+            out_f.close()
 
 
 if __name__ == "__main__":
