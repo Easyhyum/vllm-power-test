@@ -1185,7 +1185,7 @@ class VllmConfig:
             self.compilation_config.cudagraph_capture_sizes = []
 
         # complete the remaining process.
-        print(f"cudagraph_capture_sizes before SP[{max_cudagraph_capture_size}]:{cudagraph_capture_sizes}")
+        # print(f"cudagraph_capture_sizes before SP[{max_cudagraph_capture_size}]:{cudagraph_capture_sizes}")
         self.compilation_config.post_init_cudagraph_sizes()
 
     def _set_compile_ranges(self):

@@ -90,6 +90,7 @@ from vllm.pooling_params import PoolingParams
 from vllm.sampling_params import SamplingType
 from vllm.sequence import IntermediateTensors
 from vllm.tasks import GenerationTask, PoolingTask, SupportedTask
+from vllm.utils.gpu_profile import GPUMonitor
 from vllm.utils import length_from_prompt_token_ids_or_embeds
 from vllm.utils.jsontree import json_map_leaves
 from vllm.utils.math_utils import cdiv, round_up
@@ -174,6 +175,7 @@ from .utils import (
     bind_kv_cache,
     sanity_check_mm_encoder_outputs,
 )
+
 
 if TYPE_CHECKING:
     from vllm.model_executor.model_loader.tensorizer import TensorizerConfig
@@ -3216,15 +3218,48 @@ class GPUModelRunner(
             record_function_or_nullcontext("gpu_model_runner: forward"),
             self.maybe_get_kv_connector_output(scheduler_output) as kv_connector_output,
         ):
-            ## print iteration 
-            print(f"**** Graphcudagraph batch_desc: {batch_desc}, cudagraph_mode: {cudagraph_mode}, should_ubatch: {should_ubatch}, num_tokens_across_dp: {num_tokens_across_dp}, num_scheduled_tokens_np: {num_scheduled_tokens_np}")
-            model_output = self._model_forward(
-                input_ids=input_ids,
-                positions=positions,
-                intermediate_tensors=intermediate_tensors,
-                inputs_embeds=inputs_embeds,
-                **model_kwargs,
-            )
+            start_time = time.time()
+            is_decoding = np.all(num_scheduled_tokens_np == 1) and cudagraph_mode
+            # is_decoding = True
+            if not is_decoding:
+                model_output = self._model_forward(
+                    input_ids=input_ids,
+                    positions=positions,
+                    intermediate_tensors=intermediate_tensors,
+                    inputs_embeds=inputs_embeds,
+                    **model_kwargs,
+                )
+            else:
+                batch_size = num_reqs
+                graph_batch_size = batch_desc.num_reqs
+                # print(f"{time.time() - start_time:.5f} sec taken for model forward {batch_size}, {graph_batch_size} {len(num_scheduled_tokens_np)} {num_scheduled_tokens_np}")
+                # print(f"cudagraph_mode: {cudagraph_mode}, batch_desc: {batch_desc}")
+                device_id = 0
+                monitor_graph = GPUMonitor(device_id=device_id, batch_size=batch_size, graph_batch_size=graph_batch_size)
+                def run_model_forward_100():
+                    for _ in range(1000):
+                        self._model_forward(
+                        input_ids=input_ids,
+                        positions=positions,
+                        intermediate_tensors=intermediate_tensors,
+                        inputs_embeds=inputs_embeds,
+                        **model_kwargs,
+                    )
+                    return self._model_forward(
+                        input_ids=input_ids,
+                        positions=positions,
+                        intermediate_tensors=intermediate_tensors,
+                        inputs_embeds=inputs_embeds,
+                        **model_kwargs,
+                    )
+                model_output = monitor_graph.collect_during_execution(
+                    run_model_forward_100,
+                    num_samples=batch_size
+                )
+                
+                # GPU 메트릭 출력
+                if is_decoding:
+                    monitor_graph.print_statistics(f"Model Forward ({'decoding' if is_decoding else 'prefill'}) time: {monitor_graph.execution_time:.2f}s (graph_batch: {graph_batch_size}, batch={batch_size}, reqs={num_reqs}, cudagraph={cudagraph_mode})")
 
         with record_function_or_nullcontext("gpu_model_runner: postprocess"):
             if self.use_aux_hidden_state_outputs:

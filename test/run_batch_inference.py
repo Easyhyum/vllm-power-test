@@ -23,7 +23,6 @@ os.environ.setdefault("VLLM_LOGGING_LEVEL", "WARNING")
 
 from vllm import LLM, SamplingParams
 
-
 def read_prompts_from_file(path: str) -> List[str]:
     prompts = []
     if path.endswith(".jsonl"):
@@ -70,9 +69,10 @@ def main():
     parser.add_argument("--max-samples", type=int, default=0, help="Max samples to pull from dataset (0 = all)")
     parser.add_argument("--output-file", "-o", default="outputs.jsonl", help="JSONL output file")
     parser.add_argument("--batch-size", "-b", type=int, default=16)
-    parser.add_argument("--model", default="meta-llama/Llama-3.2-1B-Instruct")
-    parser.add_argument("--gpu-memory-utilization", type=float, default=0.4)
-    parser.add_argument("--max-tokens", type=int, default=1024)
+    # parser.add_argument("--model", default="meta-llama/Llama-3.2-1B-Instruct")
+    parser.add_argument("--model", default="meta-llama/Llama-3.1-8B-Instruct")
+    parser.add_argument("--gpu-memory-utilization", type=float, default=0.8)
+    parser.add_argument("--max-tokens", type=int, default=4)
     parser.add_argument("--trust-remote-code", action="store_true")
     parser.add_argument("--data-len", type=int, default=16)
     args = parser.parse_args()
@@ -126,13 +126,12 @@ def main():
         gpu_memory_utilization=args.gpu_memory_utilization,
         max_cudagraph_capture_size=256,
     )
-
+    
     sampling_params = SamplingParams(temperature=0.8, top_p=0.95, max_tokens=args.max_tokens)
 
     out_f = open(args.output_file, "w", encoding="utf-8")
     global_index = 0
     
-
     try:
         for batch in tqdm(list(batched(prompts, args.batch_size)), desc="Batches"):
             # sync before run for more accurate NVTX boundaries if user cares
