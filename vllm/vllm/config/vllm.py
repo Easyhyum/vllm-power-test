@@ -1115,12 +1115,12 @@ class VllmConfig:
                 cudagraph_capture_sizes.sort()
             else:
                 cudagraph_capture_sizes = [
-                    i for i in [1, 2, 4] if i <= max_cudagraph_capture_size
+                    i for i in [1, 2, 4, 8, 9, 10] if i <= max_cudagraph_capture_size
                 ]
                 if max_cudagraph_capture_size >= 8:
                     # Step size 8 for small batch sizes, up to 256(not included)
                     cudagraph_capture_sizes += list(
-                        range(8, min(max_cudagraph_capture_size + 1, 256), 8)
+                        range(16, min(max_cudagraph_capture_size + 1, 256), 8)
                     )
                 if max_cudagraph_capture_size >= 256:
                     # Step size 16 for larger batch sizes

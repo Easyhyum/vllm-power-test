@@ -140,7 +140,7 @@ class GPUMonitor:
                 if metric:
                     metric['timestamp'] = time.time()
                     self.metrics.append(metric)
-                time.sleep(0.01)  # 10ms 간격
+                time.sleep(0.1)  # 10ms 간격
         
         monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
         monitor_thread.start()
@@ -149,7 +149,7 @@ class GPUMonitor:
             result = func(*args, **kwargs)
         finally:
             monitoring = False
-            monitor_thread.join(timeout=1.0)
+            monitor_thread.join(timeout=5.0)
             if start_time:
                 self.execution_time = time.time() - start_time
         
