@@ -20,6 +20,8 @@ from vllm.ray.lazy_utils import is_in_ray_actor
 
 from .platform_utils import cuda_is_initialized, xpu_is_initialized
 
+import torch
+
 logger = init_logger(__name__)
 CYAN = "\033[0;36m"
 RESET = "\033[0;0m"
@@ -55,6 +57,21 @@ class GPUMonitor:
             return None
         
         try:
+        # 1. 전력 제한(Power Cap)에 걸린 시간 가져오기
+            power_violation = pynvml.nvmlDeviceGetViolationStatus(self.handle, pynvml.NVML_PERF_POLICY_POWER)
+            
+            # 반환값은 객체이며 .violationTime과 .referenceTime 속성을 가집니다.
+            # 단위는 나노초(nanoseconds)입니다.
+            p_violation_time_ns = power_violation.violationTime
+            p_reference_time_ns = power_violation.referenceTime
+            
+            # 보기 좋게 밀리초(ms)나 초(s)로 변환
+            
+            # 2. 온도 제한(Thermal)에 걸린 시간 가져오기
+            thermal_violation = pynvml.nvmlDeviceGetViolationStatus(self.handle, pynvml.NVML_PERF_POLICY_THERMAL)
+            
+            t_violation_time_ns = thermal_violation.violationTime 
+    
             # 전력 (mW)
             power = pynvml.nvmlDeviceGetPowerUsage(self.handle) / 1000.0  # W로 변환
             
@@ -95,7 +112,10 @@ class GPUMonitor:
                 'memory_used': memory_used,
                 'memory_total': memory_total,
                 'gpu_util': gpu_util,
-                'memory_util': memory_util
+                'memory_util': memory_util,
+                'power_violation_time_ns': p_violation_time_ns,
+                'power_reference_time_ns': p_reference_time_ns,
+                'thermal_violation_time_ns': t_violation_time_ns
             }
         except Exception as e:
             print(f"메트릭 수집 오류: {e}")
@@ -137,11 +157,19 @@ class GPUMonitor:
         def monitor_loop():
             nonlocal start_time
             start_time = time.time()
+            # Ensure CUDA is initialized before NVTX
+            # if torch.cuda.is_available():
+            #     torch.cuda.synchronize()
             while monitoring:
+                # if torch.cuda.is_available():
+                #     torch.cuda.nvtx.range_push("GPU_Metric_Collection")
                 metric = self.get_metrics()
+                # if torch.cuda.is_available():
+                #     torch.cuda.nvtx.range_pop()
                 if metric:
                     metric['timestamp'] = time.time()
                     self.metrics.append(metric)
+                
                 time.sleep(0.02)  # 20ms 간격
         
         monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
@@ -164,7 +192,7 @@ class GPUMonitor:
         
         stats = {}
         for key in ['power', 'temperature', 'graphics_clock', 'sm_clock', 'memory_clock', 
-                   'gpu_util', 'memory_util']:
+                   'gpu_util', 'memory_util', 'power_violation_time_ns', 'power_reference_time_ns', 'thermal_violation_time_ns']:
             values = [m[key] for m in self.metrics if key in m and m[key] is not None]
             if values:
                 stats[key] = {
@@ -223,7 +251,8 @@ class GPUMonitor:
         import csv
         
         keys = ['cudagraph_mode', 'batch_size', 'graph_batch_size', 'index', 'length', 'timestamp', 'power', 'temperature', 'graphics_clock', 'sm_clock', 
-                'memory_clock', 'memory_used', 'memory_total', 'gpu_util', 'memory_util']
+                'memory_clock', 'memory_used', 'memory_total', 'gpu_util', 'memory_util', 
+                'power_violation_time_ns', 'power_reference_time_ns', 'thermal_violation_time_ns']
         # row = {"cudagraph_mode": self.cudagraph_mode, "batch_size": self.batch_size, "graph_batch_size": self.graph_batch_size, 'decoding_steps': self.decoding_steps}
         file_path = os.path.join(path, f"gpu_profile_{os.getpid()}.csv")
         length = len(self.metrics)

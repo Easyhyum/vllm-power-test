@@ -131,45 +131,71 @@ def main():
     out_f = open(args.output_file, "w", encoding="utf-8")
     global_index = 0
     
-    test_sequence = [{
-        'data_len': 256,
-        'batch_size': 16,
-        "max_tokens": 256
-    },
+    test_sequence = [
     {
-        'data_len': 256,
-        'batch_size': 8,
+        'data_len': 1,
+        'batch_size': 1,
         "max_tokens": 256
     },
-    {
-        'data_len': 256,
-        'batch_size': 9,
-        "max_tokens": 256
-    },
-    {
-        'data_len': 256,
-        'batch_size': 10,
-        "max_tokens": 256
-    },
+    # {
+    #     'data_len': 2,
+    #     'batch_size': 2,
+    #     "max_tokens": 256
+    # },
+    # {
+    #     'data_len': 4,
+    #     'batch_size': 4,
+    #     "max_tokens": 256
+    # },
+    # {
+    #     'data_len': 8,
+    #     'batch_size': 8,
+    #     "max_tokens": 256
+    # },
+    # {
+    #     'data_len': 9,
+    #     'batch_size': 9,
+    #     "max_tokens": 256
+    # },
+    # {
+    #     'data_len': 10,
+    #     'batch_size': 10,
+    #     "max_tokens": 256
+    # },
+    # {
+    #     'data_len': 16,
+    #     'batch_size': 16,
+    #     "max_tokens": 256
+    # },
+    # {
+    #     'data_len': 24,
+    #     'batch_size': 24,
+    #     "max_tokens": 256
+    # },
     ]
-
-
+    csv_path = f"logs"
+    json_test_sequence = open(f"{csv_path}/test_{os.getpid()}", "w", encoding="utf-8")
+    json.dump(test_sequence, json_test_sequence, ensure_ascii=False)
     for test in test_sequence:
         batch_size = test['batch_size']
         data_len = test['data_len']
         max_tokens = test['max_tokens']
         test_prompts = prompts[: int(data_len)] if int(data_len) > 0 else prompts
         sampling_params = SamplingParams(temperature=0.8, top_p=0.95, max_tokens=max_tokens)
-        print(f"Running batch inference on {len(prompts)} prompts...")
+        
+        print(f"Running batch inference on {len(test_prompts)} prompts...")
         try:
             for batch in tqdm(list(batched(test_prompts, batch_size)), desc="Batches"):
                 # sync before run for more accurate NVTX boundaries if user cares
                 if torch.cuda.is_available():
                     torch.cuda.synchronize()
-
-                torch.cuda.nvtx.range_push("vLLM_Batch_Generation")
+                    torch.cuda.nvtx.range_push(f"vLLM_Batch_Generation_BS{batch_size}")
+                
                 outputs = llm.generate(batch, sampling_params)
-                torch.cuda.nvtx.range_pop()
+                
+                if torch.cuda.is_available():
+                    torch.cuda.synchronize()
+                    torch.cuda.nvtx.range_pop()
 
                 for input, out in zip(batch, outputs):
                     idx = global_index
@@ -181,7 +207,7 @@ def main():
                             text = out.completion_text  # some versions
                         except Exception:
                             text = out.outputs
-                    
+                    print(f"idx: {idx}, output: {out}")
                     # record = {"index": idx, "input": input}
                     # json.dump(record, out_f, ensure_ascii=False)
                     # out_f.write("\n")

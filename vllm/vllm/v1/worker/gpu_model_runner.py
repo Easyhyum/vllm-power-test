@@ -3240,20 +3240,28 @@ class GPUModelRunner(
                 # print(f"cudagraph_mode: {cudagraph_mode}, batch_desc: {batch_desc}")
                 device_id = 0
                 monitor_graph = GPUMonitor(device_id=device_id, batch_size=batch_size, graph_batch_size=graph_batch_size, decoding_steps=decoding_steps, cudagraph_mode=cudagraph_mode)
+                
                 def run_model_forward_100():
-                    for _ in range(300):
+                    for i in range(300):
+                        # torch.cuda.synchronize()
+                        # torch.cuda.nvtx.range_push(f"Model_Forward_{i}_BS{batch_size}_GBS{graph_batch_size}")
                         self._model_forward(
                         input_ids=input_ids,
                         positions=positions,
                         intermediate_tensors=intermediate_tensors,
                         inputs_embeds=inputs_embeds,
                         **model_kwargs)
-                    return self._model_forward(
+                        # torch.cuda.synchronize()
+                        # torch.cuda.nvtx.range_pop()
+
+                    model_output = self._model_forward(
                         input_ids=input_ids,
                         positions=positions,
                         intermediate_tensors=intermediate_tensors,
                         inputs_embeds=inputs_embeds,
                         **model_kwargs)
+                    return model_output
+                
                 model_output = monitor_graph.collect_during_execution(
                     run_model_forward_100,
                     num_samples=batch_size
