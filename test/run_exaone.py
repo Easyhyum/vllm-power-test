@@ -18,7 +18,8 @@ llm = LLM(
     model="meta-llama/Llama-3.2-1B-Instruct",
     trust_remote_code=True,
     gpu_memory_utilization=0.4,
-    max_model_len=4096 
+    max_model_len=4096, 
+    # enforce_eager=True # Cuda Graph 비활성화
 )
 
 print("Start Profiling & Generation...")

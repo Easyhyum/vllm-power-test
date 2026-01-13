@@ -139,7 +139,7 @@ class GPUMonitor:
             time.sleep(interval)
     
     def collect_during_execution(self, func, *args, num_samples=None, **kwargs):
-        """함수 실행 중 메트릭 수집"""
+        """함수 실행 중 메트릭 수집 (multiprocessing 사용)"""
         self.metrics = []
         self.num_samples = num_samples
         
@@ -149,37 +149,104 @@ class GPUMonitor:
             self.execution_time = time.time() - start_time
             return result
         
-        import threading
+        from multiprocessing import Process, Queue, Event
         
-        monitoring = True
-        start_time = None
+        metrics_queue = Queue()
+        stop_event = Event()
         
-        def monitor_loop():
-            nonlocal start_time
-            start_time = time.time()
-            # Ensure CUDA is initialized before NVTX
-            # if torch.cuda.is_available():
-            #     torch.cuda.synchronize()
-            while monitoring:
-                # if torch.cuda.is_available():
-                #     torch.cuda.nvtx.range_push("GPU_Metric_Collection")
-                metric = self.get_metrics()
-                # if torch.cuda.is_available():
-                #     torch.cuda.nvtx.range_pop()
-                if metric:
-                    metric['timestamp'] = time.time()
-                    self.metrics.append(metric)
+        def monitor_process(device_id, metrics_queue, stop_event):
+            """별도 프로세스에서 GPU 메트릭 수집"""
+            try:
+                # 프로세스 내에서 NVML 재초기화
+                pynvml.nvmlInit()
+                handle = pynvml.nvmlDeviceGetHandleByIndex(device_id)
                 
-                time.sleep(0.02)  # 20ms 간격
+                start_time = time.time()
+                metrics_queue.put(('start_time', start_time))
+                
+                while not stop_event.is_set():
+                    try:
+                        # 전력 측정
+                        power = pynvml.nvmlDeviceGetPowerUsage(handle) / 1000.0
+                        temp = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
+                        graphics_clock = pynvml.nvmlDeviceGetClockInfo(handle, pynvml.NVML_CLOCK_GRAPHICS)
+                        
+                        sm_clock = None
+                        try:
+                            sm_clock = pynvml.nvmlDeviceGetClockInfo(handle, pynvml.NVML_CLOCK_SM)
+                        except (pynvml.NVMLError, AttributeError):
+                            sm_clock = graphics_clock
+                        
+                        memory_clock = pynvml.nvmlDeviceGetClockInfo(handle, pynvml.NVML_CLOCK_MEM)
+                        mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+                        util = pynvml.nvmlDeviceGetUtilizationRates(handle)
+                        
+                        power_violation = pynvml.nvmlDeviceGetViolationStatus(handle, pynvml.NVML_PERF_POLICY_POWER)
+                        thermal_violation = pynvml.nvmlDeviceGetViolationStatus(handle, pynvml.NVML_PERF_POLICY_THERMAL)
+                        
+                        metric = {
+                            'timestamp': time.time(),
+                            'power': power,
+                            'temperature': temp,
+                            'graphics_clock': graphics_clock,
+                            'sm_clock': sm_clock,
+                            'memory_clock': memory_clock,
+                            'memory_used': mem_info.used / (1024 ** 2),
+                            'memory_total': mem_info.total / (1024 ** 2),
+                            'gpu_util': util.gpu,
+                            'memory_util': util.memory,
+                            'power_violation_time_ns': power_violation.violationTime,
+                            'power_reference_time_ns': power_violation.referenceTime,
+                            'thermal_violation_time_ns': thermal_violation.violationTime
+                        }
+                        
+                        metrics_queue.put(('metric', metric))
+                        
+                    except Exception as e:
+                        metrics_queue.put(('error', str(e)))
+                    
+                    time.sleep(0.1)  # 10ms 간격
+                
+                pynvml.nvmlShutdown()
+                
+            except Exception as e:
+                metrics_queue.put(('error', f"Monitor process error: {e}"))
         
-        monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
-        monitor_thread.start()
+        # 모니터링 프로세스 시작
+        monitor_proc = Process(target=monitor_process, args=(self.device_id, metrics_queue, stop_event))
+        monitor_proc.start()
+        
+        # start_time 받기
+        start_time = None
+        try:
+            msg_type, data = metrics_queue.get(timeout=2.0)
+            if msg_type == 'start_time':
+                start_time = data
+        except:
+            pass
         
         try:
+            # 메인 함수 실행
             result = func(*args, **kwargs)
         finally:
-            monitoring = False
-            monitor_thread.join(timeout=5.0)
+            # 모니터링 중지
+            stop_event.set()
+            monitor_proc.join(timeout=5.0)
+            if monitor_proc.is_alive():
+                monitor_proc.terminate()
+                monitor_proc.join(timeout=1.0)
+            
+            # 수집된 메트릭 가져오기
+            while not metrics_queue.empty():
+                try:
+                    msg_type, data = metrics_queue.get_nowait()
+                    if msg_type == 'metric':
+                        self.metrics.append(data)
+                    elif msg_type == 'error':
+                        print(f"Monitoring error: {data}")
+                except:
+                    break
+            
             if start_time:
                 self.execution_time = time.time() - start_time
         
@@ -220,15 +287,19 @@ class GPUMonitor:
         # 총 에너지 = 평균 전력 × 시간 (Joule)
         total_energy = avg_power * self.execution_time  # J
         
-        # 샘플당 에너지
+        # 샘플당 에너지 (주의: num_samples는 이미 총 처리 샘플 수)
         energy_per_sample = total_energy / self.num_samples  # J/sample
+        
+        # 처리량 계산
+        throughput = self.num_samples / self.execution_time  # samples/s
         
         return {
             'total_energy': total_energy,
             'energy_per_sample': energy_per_sample,
             'avg_power': avg_power,
             'execution_time': self.execution_time,
-            'num_samples': self.num_samples
+            'num_samples': self.num_samples,
+            'throughput': throughput
         }
             
     def update_environment_variables(envs_dict: dict[str, str]):
@@ -242,7 +313,7 @@ class GPUMonitor:
                     v,
                 )
             os.environ[k] = v
-    def save_statistics_to_csv(self, path=csv_path):
+    def save_statistics_to_csv(self, path=csv_path, during_time=None):
         """수집된 메트릭을 CSV 파일로 저장"""
         if not self.metrics:
             print("저장할 메트릭 데이터가 없습니다.")
@@ -250,13 +321,22 @@ class GPUMonitor:
         
         import csv
         
-        keys = ['cudagraph_mode', 'batch_size', 'graph_batch_size', 'index', 'length', 'timestamp', 'power', 'temperature', 'graphics_clock', 'sm_clock', 
+        # 통계 계산
+        energy_info = self.calculate_energy_per_sample()
+        avg_power_js = energy_info['avg_power'] if energy_info else None
+        total_energy = energy_info['total_energy'] if energy_info else None
+        energy_per_sample = energy_info['energy_per_sample'] if energy_info else None
+        throughput = energy_info['throughput'] if energy_info else None
+        
+        keys = ['cudagraph_mode', 'batch_size', 'graph_batch_size', 'during_time', 'index', 'length', 
+                'avg_power_js', 'total_energy_j', 'energy_per_sample', 'throughput',
+                'timestamp', 'power', 'temperature', 'graphics_clock', 'sm_clock', 
                 'memory_clock', 'memory_used', 'memory_total', 'gpu_util', 'memory_util', 
                 'power_violation_time_ns', 'power_reference_time_ns', 'thermal_violation_time_ns']
-        # row = {"cudagraph_mode": self.cudagraph_mode, "batch_size": self.batch_size, "graph_batch_size": self.graph_batch_size, 'decoding_steps': self.decoding_steps}
+        
         file_path = os.path.join(path, f"gpu_profile_{os.getpid()}.csv")
         length = len(self.metrics)
-        # Create file with header if missing, then append rows
+        
         try:
             # file_path 파일이 존재하는지 확인
             if not os.path.exists(file_path):
@@ -268,10 +348,20 @@ class GPUMonitor:
                 for i, metric in enumerate(self.metrics):
                     # build row for this metric
                     metric_row = {k: metric.get(k, None) for k in keys}
-                    # update with contextual fields
-                    metric_row.update({"cudagraph_mode": self.cudagraph_mode, "batch_size": self.batch_size, "graph_batch_size": self.graph_batch_size, "length": length, "index": i + 1})
+                    # update with contextual fields and statistics
+                    metric_row.update({
+                        "cudagraph_mode": self.cudagraph_mode, 
+                        "batch_size": self.batch_size, 
+                        "graph_batch_size": self.graph_batch_size, 
+                        "during_time": during_time, 
+                        "length": length, 
+                        "index": i + 1,
+                        "avg_power_js": avg_power_js,
+                        "total_energy_j": total_energy,
+                        "energy_per_sample": energy_per_sample,
+                        "throughput": throughput
+                    })
                     writer.writerow(metric_row)
-            # print(f"메트릭 데이터가 {file_path}에 저장되었습니다.")
         except Exception as e:
             print(f"메트릭 CSV 저장 중 오류: {e}")
     def print_statistics(self, label=""):
@@ -295,6 +385,7 @@ class GPUMonitor:
         print(f"    샘플당 에너지: {energy_info['energy_per_sample']:.6f} J/sample")
         print(f"    실행 시간: {energy_info['execution_time']:.4f} s")
         print(f"    처리 샘플 수: {energy_info['num_samples']:,}")
+        print(f"    처리량(Throughput): {energy_info['throughput']:.2f} samples/s")
         
         print(f"  온도:")
         print(f"    평균: {stats['temperature']['avg']:.1f} °C")

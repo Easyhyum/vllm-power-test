@@ -118,60 +118,78 @@ def main():
 
     # exit()
     os.environ.setdefault("VLLM_USE_V1", "1")
-
+    # print(prompts[:2])
     llm = LLM(
         model=args.model,
         trust_remote_code=args.trust_remote_code,
         gpu_memory_utilization=args.gpu_memory_utilization,
-        max_cudagraph_capture_size=256,
+        max_cudagraph_capture_size=32,
     )
-    
-
 
     out_f = open(args.output_file, "w", encoding="utf-8")
     global_index = 0
-    
+    max_tokens = 64
     test_sequence = [
+    {
+        'data_len': 32,
+        'batch_size': 32,
+        "max_tokens": max_tokens
+    },
+    {
+        'data_len': 16,
+        'batch_size': 16,
+        "max_tokens": max_tokens
+    },
+    {
+        'data_len': 10,
+        'batch_size': 10,
+        "max_tokens": max_tokens
+    },
+    {
+        'data_len': 9,
+        'batch_size': 9,
+        "max_tokens": max_tokens
+    },
+    {
+        'data_len': 8,
+        'batch_size': 8,
+        "max_tokens": max_tokens
+    },
+    {
+        'data_len': 7,
+        'batch_size': 7,
+        "max_tokens": max_tokens
+    },
+    {
+        'data_len': 6,
+        'batch_size': 6,
+        "max_tokens": max_tokens
+    },
+    {
+        'data_len': 5,
+        'batch_size': 5,
+        "max_tokens": max_tokens
+    },
+    {
+        'data_len': 4,
+        'batch_size': 4,
+        "max_tokens": max_tokens
+    },
+    {
+        'data_len': 2,
+        'batch_size': 2,
+        "max_tokens": max_tokens
+    },
     {
         'data_len': 1,
         'batch_size': 1,
-        "max_tokens": 256
+        "max_tokens": max_tokens
     },
-    # {
-    #     'data_len': 2,
-    #     'batch_size': 2,
-    #     "max_tokens": 256
-    # },
-    # {
-    #     'data_len': 4,
-    #     'batch_size': 4,
-    #     "max_tokens": 256
-    # },
-    # {
-    #     'data_len': 8,
-    #     'batch_size': 8,
-    #     "max_tokens": 256
-    # },
-    # {
-    #     'data_len': 9,
-    #     'batch_size': 9,
-    #     "max_tokens": 256
-    # },
-    # {
-    #     'data_len': 10,
-    #     'batch_size': 10,
-    #     "max_tokens": 256
-    # },
-    # {
-    #     'data_len': 16,
-    #     'batch_size': 16,
-    #     "max_tokens": 256
-    # },
-    # {
-    #     'data_len': 24,
-    #     'batch_size': 24,
-    #     "max_tokens": 256
-    # },
+    {
+        'data_len': 24,
+        'batch_size': 24,
+        "max_tokens": max_tokens
+    },
     ]
     csv_path = f"logs"
     json_test_sequence = open(f"{csv_path}/test_{os.getpid()}", "w", encoding="utf-8")
@@ -182,11 +200,13 @@ def main():
         max_tokens = test['max_tokens']
         test_prompts = prompts[: int(data_len)] if int(data_len) > 0 else prompts
         sampling_params = SamplingParams(temperature=0.8, top_p=0.95, max_tokens=max_tokens)
-        
+        print(test_prompts)
         print(f"Running batch inference on {len(test_prompts)} prompts...")
         try:
             for batch in tqdm(list(batched(test_prompts, batch_size)), desc="Batches"):
                 # sync before run for more accurate NVTX boundaries if user cares
+                import time
+                start_time = time.time()
                 if torch.cuda.is_available():
                     torch.cuda.synchronize()
                     torch.cuda.nvtx.range_push(f"vLLM_Batch_Generation_BS{batch_size}")
@@ -196,7 +216,8 @@ def main():
                 if torch.cuda.is_available():
                     torch.cuda.synchronize()
                     torch.cuda.nvtx.range_pop()
-
+                end_time = time.time()
+                print(f"Batch of size {len(batch)} took {end_time - start_time:.2f} seconds")
                 for input, out in zip(batch, outputs):
                     idx = global_index
                     global_index += 1
@@ -207,7 +228,16 @@ def main():
                             text = out.completion_text  # some versions
                         except Exception:
                             text = out.outputs
-                    print(f"idx: {idx}, output: {out}")
+                    
+                    # Extract number of generated tokens
+                    num_tokens = 0
+                    try:
+                        if hasattr(out, 'outputs') and len(out.outputs) > 0:
+                            num_tokens = len(out.outputs[0].token_ids)
+                    except Exception:
+                        pass
+                    
+                    print(f"idx: {idx} | generated_tokens: {num_tokens}\ninput: {input}\noutput: {text}")
                     # record = {"index": idx, "input": input}
                     # json.dump(record, out_f, ensure_ascii=False)
                     # out_f.write("\n")

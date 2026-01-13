@@ -3234,43 +3234,64 @@ class GPUModelRunner(
             else:
                 batch_size = num_reqs
                 graph_batch_size = batch_desc.num_reqs
-                # decoding_steps = scheduler_output.num_output_tokens.min()
                 decoding_steps = 1
-                # print(f"{time.time() - start_time:.5f} sec taken for model forward {batch_size}, {graph_batch_size} {len(num_scheduled_tokens_np)} {num_scheduled_tokens_np}")
-                # print(f"cudagraph_mode: {cudagraph_mode}, batch_desc: {batch_desc}")
                 device_id = 0
                 monitor_graph = GPUMonitor(device_id=device_id, batch_size=batch_size, graph_batch_size=graph_batch_size, decoding_steps=decoding_steps, cudagraph_mode=cudagraph_mode)
-                
-                def run_model_forward_100():
-                    for i in range(300):
-                        # torch.cuda.synchronize()
-                        # torch.cuda.nvtx.range_push(f"Model_Forward_{i}_BS{batch_size}_GBS{graph_batch_size}")
-                        self._model_forward(
-                        input_ids=input_ids,
-                        positions=positions,
-                        intermediate_tensors=intermediate_tensors,
-                        inputs_embeds=inputs_embeds,
-                        **model_kwargs)
-                        # torch.cuda.synchronize()
-                        # torch.cuda.nvtx.range_pop()
-
+                for _ in range(100):
                     model_output = self._model_forward(
                         input_ids=input_ids,
                         positions=positions,
                         intermediate_tensors=intermediate_tensors,
                         inputs_embeds=inputs_embeds,
                         **model_kwargs)
-                    return model_output
-                
-                model_output = monitor_graph.collect_during_execution(
-                    run_model_forward_100,
+                # print(f"cudagraph_mode: {cudagraph_mode}, batch_size: {batch_size}, graph_batch_size: {graph_batch_size}")
+                # model_output = self._model_forward(
+                #     input_ids=input_ids,
+                #     positions=positions,
+                #     intermediate_tensors=intermediate_tensors,
+                #     inputs_embeds=inputs_embeds,
+                #     **model_kwargs)
+                # 워밍업: GPU 상태를 안정화하고 캐시를 준비
+                # warm_up_iters = 2
+                # start_time = time.time()
+                # for _ in range(warm_up_iters):
+                #     model_output = self._model_forward(
+                #         input_ids=input_ids,
+                #         positions=positions,
+                #         intermediate_tensors=intermediate_tensors,
+                #         inputs_embeds=inputs_embeds,
+                #         **model_kwargs)
+                # torch.cuda.synchronize()
+                # during_time = time.time() - start_time
+                # print("WARM-UP Model forward pass time: {:.7f}s".format(during_time))
+                def run_model_forward_measured():
+                    # torch.cuda.nvtx.range_push("Outer model_forward")
+                    start_time = time.time()
+                    # for _ in range(graph_batch_size // batch_size):
+                    # torch.cuda.nvtx.range_push("Inner model_forward")
+                    for _ in range(600):
+                        model_output = self._model_forward(
+                            input_ids=input_ids,
+                            positions=positions,
+                            intermediate_tensors=intermediate_tensors,
+                            inputs_embeds=inputs_embeds,
+                            **model_kwargs)
+                    # torch.cuda.nvtx.range_pop()
+                    torch.cuda.synchronize()
+                    during_time = time.time() - start_time
+                    
+                    # print("Model forward pass time: {:.7f}s".format(during_time))
+                    return model_output, during_time
+
+                model_output, during_time = monitor_graph.collect_during_execution(
+                    run_model_forward_measured,
                     num_samples=batch_size
                 )
 
-                # GPU 메트릭 출력
-                monitor_graph.save_statistics_to_csv()
-                # monitor_graph.print_statistics(f"Model Forward time: {monitor_graph.execution_time:.5f}s (graph_batch: {graph_batch_size}, batch={batch_size}, reqs={num_reqs}, cudagraph={cudagraph_mode} {num_scheduled_tokens_np.tolist()})")
-                time.sleep(1)
+                # # GPU 메트릭 출력
+                monitor_graph.save_statistics_to_csv(during_time=during_time)
+                # # monitor_graph.print_statistics(f"Model Forward time: {monitor_graph.execution_time:.5f}s (graph_batch: {graph_batch_size}, batch={batch_size}, reqs={num_reqs}, cudagraph={cudagraph_mode} {num_scheduled_tokens_np.tolist()})")
+                # time.sleep(0.5)
 
         with record_function_or_nullcontext("gpu_model_runner: postprocess"):
             if self.use_aux_hidden_state_outputs:
