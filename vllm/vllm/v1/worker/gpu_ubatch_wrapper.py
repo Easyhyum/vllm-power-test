@@ -232,7 +232,7 @@ class UBatchWrapper:
 
             # Capture the cudagraph
             cudagraph_metadata = CUDAGraphMetaData(
-                cudagraph=torch.cuda.CUDAGraph(),
+                cudagraph=torch.cuda.CUDAGraph(keep_graph=True),
                 ubatch_metadata=ubatch_metadata,
             )
             if self.graph_pool is not None:

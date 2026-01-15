@@ -123,12 +123,19 @@ def main():
         model=args.model,
         trust_remote_code=args.trust_remote_code,
         gpu_memory_utilization=args.gpu_memory_utilization,
-        max_cudagraph_capture_size=32,
+        max_cudagraph_capture_size=16,
     )
 
     out_f = open(args.output_file, "w", encoding="utf-8")
     global_index = 0
     max_tokens = 64
+    # test_sequence = [
+    # {
+    #     'data_len': 9,
+    #     'batch_size': 9,
+    #     "max_tokens": max_tokens
+    # },
+    # ]
     test_sequence = [
     {
         'data_len': 32,
@@ -141,11 +148,6 @@ def main():
         "max_tokens": max_tokens
     },
     {
-        'data_len': 10,
-        'batch_size': 10,
-        "max_tokens": max_tokens
-    },
-    {
         'data_len': 9,
         'batch_size': 9,
         "max_tokens": max_tokens
@@ -153,16 +155,6 @@ def main():
     {
         'data_len': 8,
         'batch_size': 8,
-        "max_tokens": max_tokens
-    },
-    {
-        'data_len': 7,
-        'batch_size': 7,
-        "max_tokens": max_tokens
-    },
-    {
-        'data_len': 6,
-        'batch_size': 6,
         "max_tokens": max_tokens
     },
     {
@@ -185,12 +177,13 @@ def main():
         'batch_size': 1,
         "max_tokens": max_tokens
     },
-    {
-        'data_len': 24,
-        'batch_size': 24,
-        "max_tokens": max_tokens
-    },
     ]
+    # for i in range(1,17):
+    #     test_sequence.append({
+    #         'data_len': i,
+    #         'batch_size': i,
+    #         "max_tokens": max_tokens
+    #     })
     csv_path = f"logs"
     json_test_sequence = open(f"{csv_path}/test_{os.getpid()}", "w", encoding="utf-8")
     json.dump(test_sequence, json_test_sequence, ensure_ascii=False)
@@ -199,8 +192,8 @@ def main():
         data_len = test['data_len']
         max_tokens = test['max_tokens']
         test_prompts = prompts[: int(data_len)] if int(data_len) > 0 else prompts
-        sampling_params = SamplingParams(temperature=0.8, top_p=0.95, max_tokens=max_tokens)
-        print(test_prompts)
+        sampling_params = SamplingParams(temperature=0, top_p=0.95, max_tokens=max_tokens)
+        # print(test_prompts)
         print(f"Running batch inference on {len(test_prompts)} prompts...")
         try:
             for batch in tqdm(list(batched(test_prompts, batch_size)), desc="Batches"):

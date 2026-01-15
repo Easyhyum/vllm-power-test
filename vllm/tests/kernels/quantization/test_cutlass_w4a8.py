@@ -285,7 +285,7 @@ def test_w4a8_cuda_graph():
     # Run the model with a cuda graph
     stream = torch.cuda.Stream()
     with torch.cuda.stream(stream):
-        g = torch.cuda.CUDAGraph()
+        g = torch.cuda.CUDAGraph(keep_graph=True)
         with torch.cuda.graph(g):
             output = model(a)
 

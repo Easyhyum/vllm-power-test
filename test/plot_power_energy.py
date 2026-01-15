@@ -48,7 +48,7 @@ def load_and_aggregate_data(csv_files, x_axis='batch_size'):
     }).rename(columns={'batch_size': 'total_samples'})
     
     # index/length 비율이 0.5 이하인 항목 제거 (샘플 개수 계산 후에 적용)
-    combined_df = combined_df[combined_df['index'] / combined_df['length'] > 0.5]
+    combined_df = combined_df[combined_df['index'] / combined_df['length'] > 0.8]
     
     # 배치별로 집계 (x_axis 컬럼은 제외)
     agg_dict = {

@@ -34,7 +34,7 @@ except ImportError:
 csv_path = f"logs"
 
 class GPUMonitor:
-    def __init__(self, device_id=0, batch_size=None, graph_batch_size=None, decoding_steps=None, cudagraph_mode=None):
+    def __init__(self, device_id=0, batch_size=None, graph_batch_size=None, decoding_steps=None, cudagraph_mode=None, manipulated=False):
         self.device_id = device_id
         self.handle = None
         self.metrics = []
@@ -44,6 +44,7 @@ class GPUMonitor:
         self.graph_batch_size = graph_batch_size
         self.decoding_steps = decoding_steps
         self.cudagraph_mode = cudagraph_mode
+        self.manipulated = manipulated
         if NVML_AVAILABLE:
             try:
                 pynvml.nvmlInit()
@@ -328,7 +329,7 @@ class GPUMonitor:
         energy_per_sample = energy_info['energy_per_sample'] if energy_info else None
         throughput = energy_info['throughput'] if energy_info else None
         
-        keys = ['cudagraph_mode', 'batch_size', 'graph_batch_size', 'during_time', 'index', 'length', 
+        keys = ['cudagraph_mode', 'manipulated', 'batch_size', 'graph_batch_size', 'during_time', 'index', 'length', 
                 'avg_power_js', 'total_energy_j', 'energy_per_sample', 'throughput',
                 'timestamp', 'power', 'temperature', 'graphics_clock', 'sm_clock', 
                 'memory_clock', 'memory_used', 'memory_total', 'gpu_util', 'memory_util', 
@@ -351,6 +352,7 @@ class GPUMonitor:
                     # update with contextual fields and statistics
                     metric_row.update({
                         "cudagraph_mode": self.cudagraph_mode, 
+                        "manipulated": self.manipulated,
                         "batch_size": self.batch_size, 
                         "graph_batch_size": self.graph_batch_size, 
                         "during_time": during_time, 

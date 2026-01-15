@@ -108,7 +108,7 @@ class CudaGraphManager:
 
         # Capture the graph.
         assert num_tokens not in self.graphs
-        graph = torch.cuda.CUDAGraph()
+        graph = torch.cuda.CUDAGraph(keep_graph=True)
         with (
             set_forward_context(
                 attn_metadata,
@@ -124,7 +124,9 @@ class CudaGraphManager:
                 positions=positions,
             )
             self.hidden_states[:num_tokens] = hidden_states
+
         self.graphs[num_tokens] = graph
+
 
     @torch.inference_mode()
     def capture(
@@ -147,6 +149,12 @@ class CudaGraphManager:
         )
 
     def run(self, num_tokens: int) -> torch.Tensor:
+        # torch.cuda.synchronize()
+        # print(f"Captured CUDA graph {num_tokens} tokens.")
+        # graph = self.graphs[num_tokens]
+        # graph.enable_debug_mode()
+        # graph.debug_dump(f"/easyhyum/test/vllm_graph_dots/cudagraph_toks_{num_tokens}_tokens.txt")
+
         assert num_tokens in self.graphs
         self.graphs[num_tokens].replay()
         assert self.hidden_states is not None

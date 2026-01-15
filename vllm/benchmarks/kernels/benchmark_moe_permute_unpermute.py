@@ -94,7 +94,7 @@ def benchmark_permute(
     torch.cuda.synchronize()
 
     # Capture 10 invocations with CUDA graph
-    graph = torch.cuda.CUDAGraph()
+    graph = torch.cuda.CUDAGraph(keep_graph=True)
     with torch.cuda.graph(graph):
         for _ in range(10):
             run()
@@ -230,7 +230,7 @@ def benchmark_unpermute(
     torch.cuda.synchronize()
 
     # Capture 10 invocations with CUDA graph
-    graph = torch.cuda.CUDAGraph()
+    graph = torch.cuda.CUDAGraph(keep_graph=True)
     with torch.cuda.graph(graph):
         for _ in range(10):
             run(input)

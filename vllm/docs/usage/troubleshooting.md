@@ -133,7 +133,7 @@ If GPU/CPU communication cannot be established, you can use the following Python
 
     print("vLLM NCCL is successful!")
 
-    g = torch.cuda.CUDAGraph()
+    g = torch.cuda.CUDAGraph(keep_graph=True)
     with torch.cuda.graph(cuda_graph=g, stream=s):
         out = pynccl.all_reduce(data, stream=torch.cuda.current_stream())
 

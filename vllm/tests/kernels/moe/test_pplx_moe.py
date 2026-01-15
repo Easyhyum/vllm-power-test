@@ -621,7 +621,7 @@ def pplx_moe(
         else:
             out.fill_(0)
         stream = torch.cuda.Stream()
-        graph = torch.cuda.CUDAGraph()
+        graph = torch.cuda.CUDAGraph(keep_graph=True)
         with torch.cuda.graph(graph, stream=stream):
             out = _fused_experts(
                 a_chunk,

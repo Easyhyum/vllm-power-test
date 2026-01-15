@@ -121,7 +121,8 @@ class CUDAGraphEntry:
     batch_descriptor: BatchDescriptor
     cudagraph: torch.cuda.CUDAGraph | None = None
     output: Any | None = None
-
+    manipulated: bool = False
+    manipulated_batch_size: int | None = None
     # for cudagraph debugging, track the input addresses
     # during capture, and check if they are the same during replay
     input_addresses: list[int] | None = None
@@ -245,7 +246,7 @@ class CUDAGraphWrapper:
                 x.data_ptr() for x in args if isinstance(x, torch.Tensor)
             ]
             entry.input_addresses = input_addresses
-            cudagraph = torch.cuda.CUDAGraph()
+            cudagraph = torch.cuda.CUDAGraph(keep_graph=True)
 
             with ExitStack() as stack:
                 if self.cudagraph_options.gc_disable:

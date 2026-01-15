@@ -72,7 +72,7 @@ def graph_quickreduce(
                         -23, 1, (sz,), dtype=dtype, device=torch.cuda.current_device()
                     )
                     torch.cuda.synchronize()
-                    graph = torch.cuda.CUDAGraph()
+                    graph = torch.cuda.CUDAGraph(keep_graph=True)
                     with torch.cuda.graph(graph, stream=graph_capture_context.stream):
                         for _ in range(num_communication):
                             out1 = tensor_model_parallel_all_reduce(inp1)

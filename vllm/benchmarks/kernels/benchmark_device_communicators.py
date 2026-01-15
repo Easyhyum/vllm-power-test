@@ -290,7 +290,7 @@ class CommunicatorBenchmark:
 
                 # Capture the graph using context manager
                 with context:
-                    graph = torch.cuda.CUDAGraph()
+                    graph = torch.cuda.CUDAGraph(keep_graph=True)
                     graph_pool = torch.cuda.graph_pool_handle()
                     set_graph_pool_id(graph_pool)
                     with torch.cuda.graph(graph, pool=graph_pool, stream=stream):

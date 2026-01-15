@@ -4,6 +4,7 @@
 import functools
 import gc
 import itertools
+import os
 import time
 from collections import defaultdict
 from collections.abc import Iterator, Sequence
@@ -17,6 +18,10 @@ import numpy as np
 import torch
 import torch.distributed
 import torch.nn as nn
+
+# add api
+import cuda_graph_api
+
 from tqdm import tqdm
 
 import vllm.envs as envs
@@ -3231,67 +3236,162 @@ class GPUModelRunner(
                     inputs_embeds=inputs_embeds,
                     **model_kwargs,
                 )
+                # first 2 hidden dimensions logits for all requests 
+                # print(f"1 Model output logits shape: {model_output.shape}")
             else:
+                # print(f"graph_pool: {self.model.graph_pool}")
                 batch_size = num_reqs
                 graph_batch_size = batch_desc.num_reqs
-                decoding_steps = 1
-                device_id = 0
-                monitor_graph = GPUMonitor(device_id=device_id, batch_size=batch_size, graph_batch_size=graph_batch_size, decoding_steps=decoding_steps, cudagraph_mode=cudagraph_mode)
-                for _ in range(100):
-                    model_output = self._model_forward(
-                        input_ids=input_ids,
-                        positions=positions,
-                        intermediate_tensors=intermediate_tensors,
-                        inputs_embeds=inputs_embeds,
-                        **model_kwargs)
-                # print(f"cudagraph_mode: {cudagraph_mode}, batch_size: {batch_size}, graph_batch_size: {graph_batch_size}")
+                model_output = self._model_forward(
+                    input_ids=input_ids,
+                    positions=positions,
+                    intermediate_tensors=intermediate_tensors,
+                    inputs_embeds=inputs_embeds,
+                    **model_kwargs,
+                )
+                # print(f"{cudagraph_mode} {graph_batch_size} {batch_size} 1 Model output logits shape: {model_output.shape}")
+                # print(model_output[:,:2])
+                # print("^^^^^^^^^^^^^^^^^^^^^^^")
+                model_output = self._model_forward(
+                    input_ids=input_ids,
+                    positions=positions,
+                    intermediate_tensors=intermediate_tensors,
+                    inputs_embeds=inputs_embeds,
+                    **model_kwargs,
+                )
+                # print(f"{cudagraph_mode} {graph_batch_size} {batch_size} 2 Model output logits shape: {model_output.shape}")
+                # print(model_output[:,:2])
+                # print("^^^^^^^^^^^^^^^^^^^^^^^")
+                reference_logit = model_output[:, :2].clone()
+                
+
+                manipulated = False
+                # for ibatch_desc, entry in self.model.concrete_cudagraph_entries.items():
+                #     if entry.cudagraph is not None:
+                #         file_path = f"/home/user1/easyhyum/test/cutlass_param/cutlassparams_batch_{ibatch_desc.num_reqs}.txt"
+                #         if not os.path.exists(file_path): 
+                #             igraph = entry.cudagraph
+                #             raw_capsule = igraph.raw_cuda_graph()
+                #             # ret = cuda_graph_api.inspect_cutlass_gemm_params(raw_capsule)
+                #             ret = cuda_graph_api.debug_all_graph_nodes(raw_capsule)
+                #             #string save to text file
+                #             with open(file_path, "w", encoding="utf-8") as sf:
+                #                 sf.write(ret)
+                #         # print(f"Batch: {type(batch_desc)} {batch_desc}, CUDAGraph: {entry.cudagraph}")
+                #         if graph_batch_size == ibatch_desc.num_reqs:
+                #             if entry.manipulated:
+                #                 manipulated = entry.manipulated_batch_size
+                #             file_path = f"/home/user1/easyhyum/test/vllm_graph_dots/cudagraph_batch_{ibatch_desc.num_reqs}.dot"
+                #             igraph = entry.cudagraph
+                #             if not os.path.exists(file_path) and not entry.manipulated:
+                #                 igraph.enable_debug_mode()
+                #                 igraph.debug_dump(f"/home/user1/easyhyum/test/vllm_graph_dots/cudagraph_batch_{ibatch_desc.num_reqs}.dot")
+
+                #             if batch_size != graph_batch_size and not entry.manipulated and batch_size in [5,9]:
+                #                 raw_capsule = igraph.raw_cuda_graph()
+                #                 file_path = f"/home/user1/easyhyum/test/vllm_graph_dots/modified_cudagraph_batch_{ibatch_desc.num_reqs}_{batch_size}_.dot"
+                #                 ret = cuda_graph_api.manipulation_Llama_3_1_8B_Instruct_graph(raw_capsule, graph_batch_size, batch_size, file_path)
+                #                 entry.manipulated = True
+                #                 entry.manipulated_batch_size = batch_size
+                #                 igraph.instantiate()
+                #                 manipulated = batch_size
+                #                 print(f"Manipulated CUDAGraph from batch {graph_batch_size} to {batch_size}, saved to {file_path}")
+                #             break
                 # model_output = self._model_forward(
                 #     input_ids=input_ids,
                 #     positions=positions,
                 #     intermediate_tensors=intermediate_tensors,
                 #     inputs_embeds=inputs_embeds,
-                #     **model_kwargs)
-                # 워밍업: GPU 상태를 안정화하고 캐시를 준비
-                # warm_up_iters = 2
-                # start_time = time.time()
-                # for _ in range(warm_up_iters):
-                #     model_output = self._model_forward(
-                #         input_ids=input_ids,
-                #         positions=positions,
-                #         intermediate_tensors=intermediate_tensors,
-                #         inputs_embeds=inputs_embeds,
-                #         **model_kwargs)
-                # torch.cuda.synchronize()
-                # during_time = time.time() - start_time
-                # print("WARM-UP Model forward pass time: {:.7f}s".format(during_time))
-                def run_model_forward_measured():
-                    # torch.cuda.nvtx.range_push("Outer model_forward")
-                    start_time = time.time()
-                    # for _ in range(graph_batch_size // batch_size):
-                    # torch.cuda.nvtx.range_push("Inner model_forward")
-                    for _ in range(600):
+                #     **model_kwargs,
+                # )
+                # print(f"{cudagraph_mode} {graph_batch_size} {batch_size} 3 Model output logits shape: {model_output.shape}")
+                # print(model_output[:,:2])
+                # print("^^^^^^^^^^^^^^^^^^^^^^^")
+                if graph_batch_size != batch_size and manipulated != False:
+                    if not torch.allclose(model_output[:batch_size, :2], reference_logit[:batch_size, :2], atol=1e-5):
+                        print(f"Difference found in batch index \n {model_output[:, :2]} \n vs \n {reference_logit[:, :2]}")
+                    if torch.allclose(model_output[batch_size:, :2], reference_logit[batch_size:, :2], atol=1e-5):
+                        print(f"Same Found in out of batch index \n {model_output[:, :2]} \n vs \n {reference_logit[:,:2]}")
+                # model_output = self._model_forward(
+                #     input_ids=input_ids,
+                #     positions=positions,
+                #     intermediate_tensors=intermediate_tensors,
+                #     inputs_embeds=inputs_embeds,
+                #     **model_kwargs,
+                # )
+                # if 0:
+                if cudagraph_mode == CUDAGraphMode.FULL:
+                # if batch_size == graph_batch_size or manipulated != False:
+                    decoding_steps = 1
+                    device_id = 0
+                    monitor_graph = GPUMonitor(device_id=device_id, batch_size=batch_size, graph_batch_size=graph_batch_size, decoding_steps=decoding_steps, cudagraph_mode=cudagraph_mode, manipulated=manipulated)
+                    for _ in range(100):
                         model_output = self._model_forward(
                             input_ids=input_ids,
                             positions=positions,
                             intermediate_tensors=intermediate_tensors,
                             inputs_embeds=inputs_embeds,
                             **model_kwargs)
-                    # torch.cuda.nvtx.range_pop()
-                    torch.cuda.synchronize()
-                    during_time = time.time() - start_time
-                    
-                    # print("Model forward pass time: {:.7f}s".format(during_time))
-                    return model_output, during_time
 
-                model_output, during_time = monitor_graph.collect_during_execution(
-                    run_model_forward_measured,
-                    num_samples=batch_size
-                )
+                    def run_model_forward_measured():
+                        # torch.cuda.nvtx.range_push("Outer model_forward")
+                        start_time = time.time()
+                        # for _ in range(graph_batch_size // batch_size):
+                        # torch.cuda.nvtx.range_push("Inner model_forward")
+                        for _ in range(600):
+                            model_output = self._model_forward(
+                                input_ids=input_ids,
+                                positions=positions,
+                                intermediate_tensors=intermediate_tensors,
+                                inputs_embeds=inputs_embeds,
+                                **model_kwargs)
+                        # torch.cuda.nvtx.range_pop()
+                        torch.cuda.synchronize()
+                        during_time = time.time() - start_time
+                        
+                        # print("Model forward pass time: {:.7f}s".format(during_time))
+                        return model_output, during_time
 
-                # # GPU 메트릭 출력
-                monitor_graph.save_statistics_to_csv(during_time=during_time)
-                # # monitor_graph.print_statistics(f"Model Forward time: {monitor_graph.execution_time:.5f}s (graph_batch: {graph_batch_size}, batch={batch_size}, reqs={num_reqs}, cudagraph={cudagraph_mode} {num_scheduled_tokens_np.tolist()})")
-                # time.sleep(0.5)
+                    model_output, during_time = monitor_graph.collect_during_execution(
+                        run_model_forward_measured,
+                        num_samples=batch_size
+                    )
+
+                    # # GPU 메트릭 출력
+                    monitor_graph.save_statistics_to_csv(during_time=during_time)
+                    # # monitor_graph.print_statistics(f"Model Forward time: {monitor_graph.execution_time:.5f}s (graph_batch: {graph_batch_size}, batch={batch_size}, reqs={num_reqs}, cudagraph={cudagraph_mode} {num_scheduled_tokens_np.tolist()})")
+                    # time.sleep(0.5)
+                else:
+                    model_output = self._model_forward(
+                        input_ids=input_ids,
+                        positions=positions,
+                        intermediate_tensors=intermediate_tensors,
+                        inputs_embeds=inputs_embeds,
+                        **model_kwargs,
+                    )
+                    # print(f"{cudagraph_mode} {graph_batch_size} {batch_size} 1 Model output logits shape: {model_output.shape}")
+                    # print(model_output[:,:2])
+                    # print("^^^^^^^^^^^^^^^^^^^^^^^")
+                    # model_output = self._model_forward(
+                    #     input_ids=input_ids,
+                    #     positions=positions,
+                    #     intermediate_tensors=intermediate_tensors,
+                    #     inputs_embeds=inputs_embeds,
+                    #     **model_kwargs,
+                    # )
+                    # print(f"{cudagraph_mode} {graph_batch_size} {batch_size} 2 Model output logits shape: {model_output.shape}")
+                    # print(model_output[:,:2])
+                    # print("^^^^^^^^^^^^^^^^^^^^^^^")
+                    # model_output = self._model_forward(
+                    #     input_ids=input_ids,
+                    #     positions=positions,
+                    #     intermediate_tensors=intermediate_tensors,
+                    #     inputs_embeds=inputs_embeds,
+                    #     **model_kwargs,
+                    # )
+                    # print(f"{cudagraph_mode} {graph_batch_size} {batch_size} 2 Model output logits shape: {model_output.shape}")
+                    # print(model_output[:,:2])
+                    # print("^^^^^^^^^^^^^^^^^^^^^^^")
 
         with record_function_or_nullcontext("gpu_model_runner: postprocess"):
             if self.use_aux_hidden_state_outputs:

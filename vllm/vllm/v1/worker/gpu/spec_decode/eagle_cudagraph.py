@@ -85,7 +85,7 @@ class EagleCudaGraphManager:
 
         # Capture the graph.
         assert num_tokens not in self.graphs
-        graph = torch.cuda.CUDAGraph()
+        graph = torch.cuda.CUDAGraph(keep_graph=True)
         with torch.cuda.graph(graph, self.pool):
             generate_fn(num_tokens, attn_metadata, num_tokens_across_dp)
         self.graphs[num_tokens] = graph

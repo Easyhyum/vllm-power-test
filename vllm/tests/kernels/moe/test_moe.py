@@ -194,7 +194,7 @@ def run_moe_test(
     if use_cudagraph:
         test_output.fill_(0)
         stream = torch.cuda.Stream()
-        graph = torch.cuda.CUDAGraph()
+        graph = torch.cuda.CUDAGraph(keep_graph=True)
         with torch.cuda.graph(graph, stream=stream):
             test_output = moe_fn(
                 a,

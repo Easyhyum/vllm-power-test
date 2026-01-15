@@ -139,7 +139,7 @@ def test_pynccl_multiple_allreduce_with_vllm():
 @worker_fn_wrapper
 def worker_fn_with_cudagraph():
     with torch.no_grad():
-        graph = torch.cuda.CUDAGraph()
+        graph = torch.cuda.CUDAGraph(keep_graph=True)
         pynccl_comm = PyNcclCommunicator(
             get_world_group().cpu_group, device=get_world_group().device
         )

@@ -217,7 +217,7 @@ def bench_run(
         torch.cuda.synchronize()
 
     cutlass_stream = torch.cuda.Stream()
-    cutlass_graph = torch.cuda.CUDAGraph()
+    cutlass_graph = torch.cuda.CUDAGraph(keep_graph=True)
     with torch.cuda.graph(cutlass_graph, stream=cutlass_stream):
         run_cutlass_from_graph(
             a,
@@ -236,7 +236,7 @@ def bench_run(
     torch.cuda.synchronize()
 
     triton_stream = torch.cuda.Stream()
-    triton_graph = torch.cuda.CUDAGraph()
+    triton_graph = torch.cuda.CUDAGraph(keep_graph=True)
     with torch.cuda.graph(triton_graph, stream=triton_stream):
         run_triton_from_graph(
             a,

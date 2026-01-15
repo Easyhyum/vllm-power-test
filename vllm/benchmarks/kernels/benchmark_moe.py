@@ -174,7 +174,7 @@ def benchmark_config(
     torch.cuda.synchronize()
 
     # Capture 10 invocations with CUDA graph
-    graph = torch.cuda.CUDAGraph()
+    graph = torch.cuda.CUDAGraph(keep_graph=True)
     with torch.cuda.graph(graph):
         for _ in range(10):
             run()

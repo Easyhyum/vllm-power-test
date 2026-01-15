@@ -479,7 +479,7 @@ def benchmark():
         model(input_ids, positions)
         for b in cudagraph_sizes[::-1]:
             if not piecewise:
-                graph = torch.cuda.CUDAGraph()
+                graph = torch.cuda.CUDAGraph(keep_graph=True)
                 with torch.cuda.graph(graph, pool=pool):
                     output = model(input_ids[:b], positions[:b])
                 graphs[b] = (graph, output)

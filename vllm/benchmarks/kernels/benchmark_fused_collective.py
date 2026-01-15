@@ -374,7 +374,7 @@ def benchmark_operation(
     torch.cuda.synchronize()
 
     # Create CUDA graph
-    graph = torch.cuda.CUDAGraph()
+    graph = torch.cuda.CUDAGraph(keep_graph=True)
     num_op_per_cudagraph = 10
 
     # Use vLLM's graph_capture to make tensor_model_parallel_all_reduce graph-safe

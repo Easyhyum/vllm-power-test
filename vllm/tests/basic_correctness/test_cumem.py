@@ -92,7 +92,7 @@ def test_cumem_with_cudagraph():
     model(x)
 
     # capture cudagraph
-    model_graph = torch.cuda.CUDAGraph()
+    model_graph = torch.cuda.CUDAGraph(keep_graph=True)
     with torch.cuda.graph(model_graph):
         y = model(x)
 

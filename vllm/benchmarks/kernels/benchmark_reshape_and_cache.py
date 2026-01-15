@@ -81,7 +81,7 @@ def run_benchmark(
     )
 
     if benchmark_mode == "cudagraph":
-        g = torch.cuda.CUDAGraph()
+        g = torch.cuda.CUDAGraph(keep_graph=True)
         with torch.cuda.graph(g):
             function_under_test()
         torch.cuda.synchronize()

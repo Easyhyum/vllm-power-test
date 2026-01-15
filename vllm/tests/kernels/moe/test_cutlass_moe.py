@@ -350,7 +350,7 @@ def test_cutlass_moe_8_bit_cuda_graph(
         )
 
         stream = torch.cuda.Stream()
-        graph = torch.cuda.CUDAGraph()
+        graph = torch.cuda.CUDAGraph(keep_graph=True)
         with torch.cuda.graph(graph, stream=stream):
             cutlass_output = run_8_bit(
                 mt, topk_weights, topk_ids, per_act_token, per_out_ch

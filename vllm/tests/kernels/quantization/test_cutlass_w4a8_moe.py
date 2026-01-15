@@ -332,7 +332,7 @@ def test_cutlass_w4a8_moe_mm_cuda_graph():
 
     stream = torch.cuda.Stream()
     with torch.cuda.stream(stream):
-        g = torch.cuda.CUDAGraph()
+        g = torch.cuda.CUDAGraph(keep_graph=True)
         with torch.cuda.graph(g):
             out_static = model(a_static)
 

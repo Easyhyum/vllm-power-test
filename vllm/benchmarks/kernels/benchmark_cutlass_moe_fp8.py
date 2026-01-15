@@ -211,7 +211,7 @@ def bench_run(
 
     # Create CUDA graphs for CUTLASS (match benchmark_moe.py pattern exactly)
     cutlass_stream = torch.cuda.Stream()
-    cutlass_graph = torch.cuda.CUDAGraph()
+    cutlass_graph = torch.cuda.CUDAGraph(keep_graph=True)
     with torch.cuda.graph(cutlass_graph, stream=cutlass_stream):
         # Capture 10 invocations like benchmark_moe.py
         for _ in range(10):
@@ -233,7 +233,7 @@ def bench_run(
 
     # Create CUDA graphs for Triton (match benchmark_moe.py pattern exactly)
     triton_stream = torch.cuda.Stream()
-    triton_graph = torch.cuda.CUDAGraph()
+    triton_graph = torch.cuda.CUDAGraph(keep_graph=True)
     with torch.cuda.graph(triton_graph, stream=triton_stream):
         # Capture 10 invocations like benchmark_moe.py
         for _ in range(10):
